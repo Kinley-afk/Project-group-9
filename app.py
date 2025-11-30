@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, r2_score
@@ -104,29 +102,18 @@ if selected_indicator:
     indicator_data = df_clean[df_clean['GHO (DISPLAY)'] == selected_indicator]
     
     if not indicator_data.empty:
-        fig, ax = plt.subplots(figsize=(12, 6))
-        
         # Sort by year
         indicator_data = indicator_data.sort_values('YEAR (DISPLAY)')
         
-        # Plot main values
-        ax.plot(indicator_data['YEAR (DISPLAY)'], indicator_data['Numeric'], 
-                marker='o', linewidth=2, markersize=6, label='Value')
+        # Create chart data
+        chart_data = indicator_data[['YEAR (DISPLAY)', 'Numeric']].set_index('YEAR (DISPLAY)')
         
-        # Plot confidence intervals if available
-        if 'Low' in indicator_data.columns and 'High' in indicator_data.columns:
-            ax.fill_between(indicator_data['YEAR (DISPLAY)'], 
-                           indicator_data['Low'], 
-                           indicator_data['High'], 
-                           alpha=0.3, label='Confidence Interval')
+        st.write(f"**Trend of {selected_indicator}**")
+        st.line_chart(chart_data)
         
-        ax.set_xlabel('Year')
-        ax.set_ylabel(selected_indicator)
-        ax.set_title(f'Trend of {selected_indicator} in Bhutan')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        
-        st.pyplot(fig)
+        # Show data table
+        st.write("**Data Values:**")
+        st.dataframe(indicator_data[['YEAR (DISPLAY)', 'Numeric', 'Low', 'High']].reset_index(drop=True))
 
 # Treatment success rates
 st.write("#### Treatment Success Rates")
@@ -141,16 +128,9 @@ if treatment_indicators:
         treatment_data = treatment_data.sort_values('YEAR (DISPLAY)')
         
         if not treatment_data.empty:
-            fig, ax = plt.subplots(figsize=(10, 5))
-            ax.plot(treatment_data['YEAR (DISPLAY)'], treatment_data['Numeric'], 
-                   marker='s', linewidth=2, markersize=6, color='green')
-            ax.set_xlabel('Year')
-            ax.set_ylabel('Success Rate (%)')
-            ax.set_title(f'{selected_treatment} Over Time')
-            ax.grid(True, alpha=0.3)
-            ax.set_ylim(0, 100)
-            
-            st.pyplot(fig)
+            chart_data = treatment_data[['YEAR (DISPLAY)', 'Numeric']].set_index('YEAR (DISPLAY)')
+            st.write(f"**{selected_treatment} Over Time**")
+            st.line_chart(chart_data)
 
 # ----------------------------------------------------
 # SECTION 4: FEATURE ENGINEERING
@@ -190,6 +170,14 @@ st.write("#### Indicator Categories")
 category_counts = df_features['Indicator_Category'].value_counts()
 st.dataframe(category_counts)
 
+# Show category distribution using bar chart
+st.write("#### Category Distribution")
+category_chart_data = pd.DataFrame({
+    'Category': category_counts.index,
+    'Count': category_counts.values
+})
+st.bar_chart(category_chart_data.set_index('Category'))
+
 # ----------------------------------------------------
 # SECTION 5: MACHINE LEARNING MODEL
 # ----------------------------------------------------
@@ -225,6 +213,15 @@ if len(model_data) > 5:  # Ensure we have enough data
         st.write(f"Mean Absolute Error: {mae:.2f}")
         st.write(f"R² Score: {r2:.2f}")
         
+        # Show actual vs predicted in a table
+        comparison_df = pd.DataFrame({
+            'Actual': y_test.values,
+            'Predicted': y_pred,
+            'Year': X_test['YEAR (DISPLAY)'].values
+        })
+        st.write("**Actual vs Predicted Values:**")
+        st.dataframe(comparison_df)
+        
         # Future prediction
         st.write("#### Predict Future Incidence")
         future_year = st.number_input("Enter year for prediction:", 
@@ -235,14 +232,20 @@ if len(model_data) > 5:  # Ensure we have enough data
             st.success(f"Predicted TB incidence in {future_year}: {prediction:.0f} per 100,000 population")
     
     with col2:
-        # Plot actual vs predicted
-        fig, ax = plt.subplots(figsize=(8, 6))
-        ax.scatter(y_test, y_pred, alpha=0.7)
-        ax.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
-        ax.set_xlabel('Actual Values')
-        ax.set_ylabel('Predicted Values')
-        ax.set_title('Actual vs Predicted TB Incidence')
-        st.pyplot(fig)
+        # Show model feature importance
+        st.write("#### Model Insights")
+        importance_df = pd.DataFrame({
+            'Feature': ['Year'],
+            'Importance': [model.feature_importances_[0]]
+        })
+        st.write("**Feature Importance:**")
+        st.dataframe(importance_df)
+        
+        # Show training data summary
+        st.write("**Training Data Summary:**")
+        st.write(f"Training samples: {len(X_train)}")
+        st.write(f"Test samples: {len(X_test)}")
+        st.write(f"Years in training: {X_train['YEAR (DISPLAY)'].min()} - {X_train['YEAR (DISPLAY)'].max()}")
         
 else:
     st.warning("Not enough data for reliable modeling. Need more incidence data points.")
@@ -297,16 +300,62 @@ with col3:
             value=f"{latest_mdr['Numeric']:.0f}"
         )
 
-# Additional visualizations
-st.write("#### Category Distribution")
-fig, ax = plt.subplots(figsize=(10, 6))
-category_counts = df_features['Indicator_Category'].value_counts()
-ax.bar(category_counts.index, category_counts.values)
-ax.set_xlabel('Indicator Categories')
-ax.set_ylabel('Count')
-ax.set_title('Distribution of TB Indicator Categories')
-plt.xticks(rotation=45)
-st.pyplot(fig)
+# Additional metrics
+st.write("#### Additional Key Metrics")
+col4, col5, col6 = st.columns(3)
+
+with col4:
+    # HIV testing coverage
+    hiv_testing = df_features[
+        df_features['GHO (DISPLAY)'] == 'TB patients with known HIV status (%)'
+    ].sort_values('YEAR (DISPLAY)').iloc[-1] if not df_features[
+        df_features['GHO (DISPLAY)'] == 'TB patients with known HIV status (%)'
+    ].empty else None
+    
+    if hiv_testing is not None:
+        st.metric(
+            label=f"HIV Testing Coverage ({hiv_testing['YEAR (DISPLAY)']})",
+            value=f"{hiv_testing['Numeric']}%"
+        )
+
+with col5:
+    # MDR-TB treatment success
+    mdr_treatment = df_features[
+        df_features['GHO (DISPLAY)'] == 'Treatment success rate for patients treated for MDR-TB (%)'
+    ].sort_values('YEAR (DISPLAY)').iloc[-1] if not df_features[
+        df_features['GHO (DISPLAY)'] == 'Treatment success rate for patients treated for MDR-TB (%)'
+    ].empty else None
+    
+    if mdr_treatment is not None:
+        st.metric(
+            label=f"MDR-TB Treatment Success ({mdr_treatment['YEAR (DISPLAY)']})",
+            value=f"{mdr_treatment['Numeric']}%"
+        )
+
+with col6:
+    # Total cases trend
+    current_cases = df_features[
+        df_features['GHO (DISPLAY)'] == 'Number of incident tuberculosis cases'
+    ].sort_values('YEAR (DISPLAY)').iloc[-1] if not df_features[
+        df_features['GHO (DISPLAY)'] == 'Number of incident tuberculosis cases'
+    ].empty else None
+    
+    previous_cases = df_features[
+        df_features['GHO (DISPLAY)'] == 'Number of incident tuberculosis cases'
+    ].sort_values('YEAR (DISPLAY)').iloc[-2] if len(df_features[
+        df_features['GHO (DISPLAY)'] == 'Number of incident tuberculosis cases'
+    ]) > 1 else None
+    
+    if current_cases is not None:
+        delta_value = None
+        if previous_cases is not None:
+            delta_value = current_cases['Numeric'] - previous_cases['Numeric']
+        
+        st.metric(
+            label=f"Total TB Cases ({current_cases['YEAR (DISPLAY)']})",
+            value=f"{current_cases['Numeric']:.0f}",
+            delta=delta_value
+        )
 
 # ----------------------------------------------------
 # SECTION 7: DATA EXPORT
@@ -349,6 +398,7 @@ with insights_col1:
     - **High Treatment Success**: Consistently high treatment success rates for new cases
     - **Improved Testing**: Increased HIV testing among TB patients in recent years
     - **MDR-TB Management**: Better detection and treatment of drug-resistant TB
+    - **Enhanced Coverage**: Improved tuberculosis treatment coverage over the years
     """)
 
 with insights_col2:
@@ -358,8 +408,18 @@ with insights_col2:
     - **MDR-TB Control**: Maintain vigilance on drug-resistant strains
     - **HIV Integration**: Strengthen TB-HIV collaborative activities
     - **Community Engagement**: Enhance community-based TB care
+    - **Data Continuity**: Ensure consistent monitoring and reporting
     """)
+
+st.write("### 📊 Data Quality Assessment")
+st.write("""
+- **Comprehensive Coverage**: Multiple TB indicators tracked over time
+- **Recent Data**: Includes data up to 2024 for most indicators
+- **Consistent Metrics**: Standardized WHO definitions and methodologies
+- **Confidence Intervals**: Many estimates include uncertainty ranges
+""")
 
 st.write("---")
 st.write("**Data Source**: WHO Global Health Observatory - Tuberculosis indicators for Bhutan")
 st.write("**Last Updated**: Dataset includes data up to 2024")
+st.write("**Analysis Period**: Comprehensive analysis from 2000 to 2024")
