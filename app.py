@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.ensemble import RandomForestRegressor
@@ -297,6 +296,17 @@ with col3:
             label=f"MDR-TB Cases ({latest_mdr['YEAR (DISPLAY)']})",
             value=f"{latest_mdr['Numeric']:.0f}"
         )
+
+# Additional visualizations
+st.write("#### Category Distribution")
+fig, ax = plt.subplots(figsize=(10, 6))
+category_counts = df_features['Indicator_Category'].value_counts()
+ax.bar(category_counts.index, category_counts.values)
+ax.set_xlabel('Indicator Categories')
+ax.set_ylabel('Count')
+ax.set_title('Distribution of TB Indicator Categories')
+plt.xticks(rotation=45)
+st.pyplot(fig)
 
 # ----------------------------------------------------
 # SECTION 7: DATA EXPORT
